@@ -1,14 +1,14 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, Libraries } from '@react-google-maps/api';
-import { MarkerClusterer } from '@googlemaps/markerclusterer';
-import { useTranslation } from 'react-i18next';
-import { useParkingSpots } from '@/hooks/useParkingSpots';
-import { useGeolocation } from '@/hooks/useGeolocation';
-import { ParkingSpot } from '@/types/parking';
-import SpotDetailsCard from './SpotDetailsCard';
-import MapControls from './MapControls';
-import SearchBar from './SearchBar';
-import { toast } from 'sonner';
+import { useState, useCallback, useEffect, useRef } from "react";
+import { GoogleMap, useJsApiLoader, Libraries } from "@react-google-maps/api";
+import { MarkerClusterer } from "@googlemaps/markerclusterer";
+import { useTranslation } from "react-i18next";
+import { useParkingSpots } from "@/hooks/useParkingSpots";
+import { useGeolocation } from "@/hooks/useGeolocation";
+import { ParkingSpot } from "@/types/parking";
+import SpotDetailsCard from "./SpotDetailsCard";
+import MapControls from "./MapControls";
+import SearchBar from "./SearchBar";
+import { toast } from "sonner";
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const GOOGLE_MAP_ID = import.meta.env.VITE_GOOGLE_MAP_ID;
@@ -24,8 +24,8 @@ const DEFAULT_ZOOM = 6;
 const LIBRARIES: Libraries = ["places", "marker"];
 
 const mapContainerStyle = {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
 };
 
 const mapOptions: google.maps.MapOptions = {
@@ -38,6 +38,44 @@ const mapOptions: google.maps.MapOptions = {
 };
 
 
+function createSpotMarkerContent() {
+    const img = document.createElement("img");
+    img.src = "/parking-marker-wheelchair.svg";
+    img.width = 40;
+    img.height = 48;
+    img.style.display = "block";
+    img.style.cursor = "pointer";
+
+    return img;
+}
+
+function createClusterContent(count: number) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "50");
+    svg.setAttribute("height", "50");
+    svg.setAttribute("viewBox", "0 0 50 50");
+    svg.style.cursor = "pointer";
+
+    svg.innerHTML = `
+      <circle cx="25" cy="25" r="25" fill="#1e3a5f"/>
+      <circle cx="25" cy="25" r="20" fill="#ffd700"/>
+      <text x="25" y="30" text-anchor="middle" fill="#1e3a5f" font-size="16" font-weight="bold" font-family="Arial">${count}</text>
+    `;
+
+    return svg;
+}
+
+function createUserDotContent() {
+    const dot = document.createElement("div");
+    dot.style.width = "20px";
+    dot.style.height = "20px";
+    dot.style.borderRadius = "50%";
+    dot.style.background = "#3b82f6";
+    dot.style.border = "3px solid #ffffff";
+    dot.style.boxSizing = "border-box";
+
+    return dot;
+}
 
 export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
     const { t } = useTranslation();
@@ -56,8 +94,8 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
         libraries: LIBRARIES,
     });
 
-    const onLoad = useCallback((map: google.maps.Map) => {
-        setMap(map);
+    const onLoad = useCallback((m: google.maps.Map) => {
+        setMap(m);
     }, []);
 
     const handleToggleMapType = () => {
@@ -71,10 +109,16 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
         }
         markersRef.current.forEach((m) => (m.map = null));
         markersRef.current = [];
+
+        if (userMarkerRef.current) {
+            userMarkerRef.current.map = null;
+            userMarkerRef.current = null;
+        }
+
         setMap(null);
     }, []);
 
-    // Create clustered markers when spots or map change
+
     useEffect(() => {
         if (!map || !isLoaded || spotsLoading) return;
 
@@ -86,19 +130,13 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
             clustererRef.current = null;
         }
 
-        // Create advanced markers for each spot
         const markers = spots.map((spot) => {
-            const img = document.createElement("img");
-            img.src = "/parking-marker-wheelchair.svg";
-            img.width = 40;
-            img.height = 48;
-            img.style.transform = "translate(-50%, -100%)"; // anchor bottom-center
-
             const marker = new google.maps.marker.AdvancedMarkerElement({
                 map,
                 position: { lat: spot.latitude, lng: spot.longitude },
-                content: img,
+                content: createSpotMarkerContent(),
                 title: "Accessible parking",
+                gmpDraggable: false,
             });
 
             marker.addListener("click", () => setSelectedSpot(spot));
@@ -107,29 +145,16 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
 
         markersRef.current = markers;
 
-        // Cluster renderer using AdvancedMarkerElement (SVG bubble)
         clustererRef.current = new MarkerClusterer({
             map,
             markers,
             renderer: {
                 render: ({ count, position }) => {
-                    const div = document.createElement("div");
-                    div.style.width = "50px";
-                    div.style.height = "50px";
-                    div.style.transform = "translate(-50%, -50%)"; // center on position
-
-                    div.innerHTML = `
-          <svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="25" cy="25" r="25" fill="#1e3a5f"/>
-            <circle cx="25" cy="25" r="20" fill="#ffd700"/>
-            <text x="25" y="30" text-anchor="middle" fill="#1e3a5f" font-size="16" font-weight="bold" font-family="Arial">${count}</text>
-          </svg>
-        `;
-
                     return new google.maps.marker.AdvancedMarkerElement({
                         position,
-                        content: div,
+                        content: createClusterContent(count),
                         zIndex: Number(google.maps.Marker.MAX_ZINDEX) + count,
+                        gmpDraggable: false,
                     });
                 },
             },
@@ -144,6 +169,7 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
         };
     }, [map, spots, isLoaded, spotsLoading]);
 
+
     useEffect(() => {
         if (!map) return;
 
@@ -154,20 +180,12 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
 
         if (!latitude || !longitude) return;
 
-        const dot = document.createElement("div");
-        dot.style.width = "20px";
-        dot.style.height = "20px";
-        dot.style.borderRadius = "9999px";
-        dot.style.background = "#3b82f6";
-        dot.style.border = "3px solid #ffffff";
-        dot.style.boxSizing = "border-box";
-        dot.style.transform = "translate(-50%, -50%)";
-
         userMarkerRef.current = new google.maps.marker.AdvancedMarkerElement({
             map,
             position: { lat: latitude, lng: longitude },
-            content: dot,
+            content: createUserDotContent(),
             zIndex: 1000,
+            gmpDraggable: false,
         });
 
         return () => {
@@ -183,12 +201,12 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
 
         const geocoder = new google.maps.Geocoder();
         geocoder.geocode({ address: query }, (results, status) => {
-            if (status === 'OK' && results && results[0]) {
+            if (status === "OK" && results && results[0]) {
                 const location = results[0].geometry.location;
                 map.panTo(location);
                 map.setZoom(13);
             } else {
-                toast.error(t('locationNotFound'));
+                toast.error(t("locationNotFound"));
             }
         });
     };
@@ -198,26 +216,22 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
             map.panTo({ lat: latitude, lng: longitude });
             map.setZoom(15);
         } else if (geoError) {
-            toast.error(t('locationError'));
+            toast.error(t("locationError"));
         }
     };
 
     const handleZoomIn = () => {
-        if (map) {
-            map.setZoom((map.getZoom() || DEFAULT_ZOOM) + 1);
-        }
+        if (map) map.setZoom((map.getZoom() || DEFAULT_ZOOM) + 1);
     };
 
     const handleZoomOut = () => {
-        if (map) {
-            map.setZoom((map.getZoom() || DEFAULT_ZOOM) - 1);
-        }
+        if (map) map.setZoom((map.getZoom() || DEFAULT_ZOOM) - 1);
     };
 
     if (loadError) {
         return (
             <div className="flex items-center justify-center h-full bg-muted">
-                <p className="text-destructive">{t('mapLoadError')}</p>
+                <p className="text-destructive">{t("mapLoadError")}</p>
             </div>
         );
     }
@@ -225,7 +239,7 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
     if (!isLoaded) {
         return (
             <div className="flex items-center justify-center h-full bg-muted">
-                <p className="text-muted-foreground">{t('loadingMap')}</p>
+                <p className="text-muted-foreground">{t("loadingMap")}</p>
             </div>
         );
     }
@@ -243,9 +257,7 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
                 }}
                 onLoad={onLoad}
                 onUnmount={onUnmount}
-            >
-
-            </GoogleMap>
+            />
 
             {/* Search Bar */}
             <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 w-[90%] max-w-xl">
@@ -263,12 +275,7 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
             />
 
             {/* Selected Spot Details */}
-            {selectedSpot && (
-                <SpotDetailsCard
-                    spot={selectedSpot}
-                    onClose={() => setSelectedSpot(null)}
-                />
-            )}
+            {selectedSpot && <SpotDetailsCard spot={selectedSpot} onClose={() => setSelectedSpot(null)} />}
         </div>
     );
 }
