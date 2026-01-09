@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, Libraries } from '@react-google-maps/api';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
 import { useTranslation } from 'react-i18next';
 import { useParkingSpots } from '@/hooks/useParkingSpots';
@@ -11,7 +11,7 @@ import SearchBar from './SearchBar';
 import { toast } from 'sonner';
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
+const GOOGLE_MAP_ID = import.meta.env.VITE_GOOGLE_MAP_ID;
 
 interface ParkingMapProps {
     onAddSpotClick: () => void;
@@ -20,6 +20,8 @@ interface ParkingMapProps {
 // Greece center coordinates
 const GREECE_CENTER = { lat: 37.9838, lng: 23.7275 };
 const DEFAULT_ZOOM = 6;
+
+const LIBRARIES: Libraries = ["places", "marker"];
 
 const mapContainerStyle = {
     width: '100%',
@@ -32,17 +34,9 @@ const mapOptions: google.maps.MapOptions = {
     mapTypeControl: false,
     streetViewControl: false,
     fullscreenControl: false,
-
     minZoom: 3,
-
-    styles: [
-        {
-            featureType: 'poi',
-            elementType: 'labels',
-            stylers: [{ visibility: 'off' }],
-        },
-    ],
 };
+
 
 
 export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
@@ -50,15 +44,16 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
     const [map, setMap] = useState<google.maps.Map | null>(null);
     const [selectedSpot, setSelectedSpot] = useState<ParkingSpot | null>(null);
     const clustererRef = useRef<MarkerClusterer | null>(null);
-    const markersRef = useRef<google.maps.Marker[]>([]);
+    const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
     const [isSatellite, setIsSatellite] = useState(false);
+    const userMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
 
     const { data: spots = [], isLoading: spotsLoading } = useParkingSpots();
     const { latitude, longitude, error: geoError } = useGeolocation();
 
     const { isLoaded, loadError } = useJsApiLoader({
         googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-        libraries: ['places'],
+        libraries: LIBRARIES,
     });
 
     const onLoad = useCallback((map: google.maps.Map) => {
@@ -70,11 +65,11 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
     };
 
     const onUnmount = useCallback(() => {
-        // Clean up clusterer kai markers
         if (clustererRef.current) {
             clustererRef.current.clearMarkers();
+            clustererRef.current = null;
         }
-        markersRef.current.forEach(marker => marker.setMap(null));
+        markersRef.current.forEach((m) => (m.map = null));
         markersRef.current = [];
         setMap(null);
     }, []);
@@ -83,22 +78,27 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
     useEffect(() => {
         if (!map || !isLoaded || spotsLoading) return;
 
-        // Clear existing markers kai clusterer
-        markersRef.current.forEach(marker => marker.setMap(null));
+        // Clear existing markers and clusterer
+        markersRef.current.forEach((m) => (m.map = null));
         markersRef.current = [];
         if (clustererRef.current) {
             clustererRef.current.clearMarkers();
+            clustererRef.current = null;
         }
 
-        // Create markers for each spot
+        // Create advanced markers for each spot
         const markers = spots.map((spot) => {
-            const marker = new google.maps.Marker({
+            const img = document.createElement("img");
+            img.src = "/parking-marker-wheelchair.svg";
+            img.width = 40;
+            img.height = 48;
+            img.style.transform = "translate(-50%, -100%)"; // anchor bottom-center
+
+            const marker = new google.maps.marker.AdvancedMarkerElement({
+                map,
                 position: { lat: spot.latitude, lng: spot.longitude },
-                icon: {
-                    url: "/parking-marker-wheelchair.svg",
-                    scaledSize: new google.maps.Size(40, 48),
-                    anchor: new google.maps.Point(20, 48),
-                },
+                content: img,
+                title: "Accessible parking",
             });
 
             marker.addListener("click", () => setSelectedSpot(spot));
@@ -107,26 +107,28 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
 
         markersRef.current = markers;
 
-        // Create clusterer with custom renderer
+        // Cluster renderer using AdvancedMarkerElement (SVG bubble)
         clustererRef.current = new MarkerClusterer({
             map,
             markers,
             renderer: {
                 render: ({ count, position }) => {
-                    return new google.maps.Marker({
+                    const div = document.createElement("div");
+                    div.style.width = "50px";
+                    div.style.height = "50px";
+                    div.style.transform = "translate(-50%, -50%)"; // center on position
+
+                    div.innerHTML = `
+          <svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="25" cy="25" r="25" fill="#1e3a5f"/>
+            <circle cx="25" cy="25" r="20" fill="#ffd700"/>
+            <text x="25" y="30" text-anchor="middle" fill="#1e3a5f" font-size="16" font-weight="bold" font-family="Arial">${count}</text>
+          </svg>
+        `;
+
+                    return new google.maps.marker.AdvancedMarkerElement({
                         position,
-                        icon: {
-                            url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
-                <svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="25" cy="25" r="25" fill="#1e3a5f"/>
-                  <circle cx="25" cy="25" r="20" fill="#ffd700"/>
-                  <text x="25" y="30" text-anchor="middle" fill="#1e3a5f" font-size="16" font-weight="bold" font-family="Arial">${count}</text>
-                </svg>
-              `)}`,
-                            scaledSize: new google.maps.Size(50, 50),
-                            anchor: new google.maps.Point(25, 25),
-                        },
-                        label: '',
+                        content: div,
                         zIndex: Number(google.maps.Marker.MAX_ZINDEX) + count,
                     });
                 },
@@ -134,12 +136,47 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
         });
 
         return () => {
-            markersRef.current.forEach(marker => marker.setMap(null));
+            markersRef.current.forEach((m) => (m.map = null));
             if (clustererRef.current) {
                 clustererRef.current.clearMarkers();
+                clustererRef.current = null;
             }
         };
     }, [map, spots, isLoaded, spotsLoading]);
+
+    useEffect(() => {
+        if (!map) return;
+
+        if (userMarkerRef.current) {
+            userMarkerRef.current.map = null;
+            userMarkerRef.current = null;
+        }
+
+        if (!latitude || !longitude) return;
+
+        const dot = document.createElement("div");
+        dot.style.width = "20px";
+        dot.style.height = "20px";
+        dot.style.borderRadius = "9999px";
+        dot.style.background = "#3b82f6";
+        dot.style.border = "3px solid #ffffff";
+        dot.style.boxSizing = "border-box";
+        dot.style.transform = "translate(-50%, -50%)";
+
+        userMarkerRef.current = new google.maps.marker.AdvancedMarkerElement({
+            map,
+            position: { lat: latitude, lng: longitude },
+            content: dot,
+            zIndex: 1000,
+        });
+
+        return () => {
+            if (userMarkerRef.current) {
+                userMarkerRef.current.map = null;
+                userMarkerRef.current = null;
+            }
+        };
+    }, [map, latitude, longitude]);
 
     const handleSearch = (query: string) => {
         if (!map) return;
@@ -202,25 +239,11 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
                 options={{
                     ...mapOptions,
                     mapTypeId: isSatellite ? "hybrid" : "roadmap",
+                    mapId: GOOGLE_MAP_ID,
                 }}
                 onLoad={onLoad}
                 onUnmount={onUnmount}
             >
-                {/* User location marker */}
-                {latitude && longitude && (
-                    <Marker
-                        position={{ lat: latitude, lng: longitude }}
-                        icon={{
-                            path: google.maps.SymbolPath.CIRCLE,
-                            scale: 10,
-                            fillColor: '#3b82f6',
-                            fillOpacity: 1,
-                            strokeColor: '#ffffff',
-                            strokeWeight: 3,
-                        }}
-                        zIndex={1000}
-                    />
-                )}
 
             </GoogleMap>
 
