@@ -20,7 +20,7 @@ function buildDisplayText(s: Suggestion) {
 
     const secondary =
         pp?.secondaryText?.text ??
-        ""; // optional
+        "";
 
     const full = [main, secondary].filter(Boolean).join(", ");
 
@@ -34,7 +34,7 @@ export default function SearchBar({ onSearch, isLoaded }: SearchBarProps) {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Close dropdown on outside click
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -67,11 +67,10 @@ export default function SearchBar({ onSearch, isLoaded }: SearchBarProps) {
                 // locationBias: { center: { lat: 37.9838, lng: 23.7275 }, radius: 50000 },
             });
 
-            // Optional: "city-ish" filtering.
-            // Google doesn't give the exact '(cities)' type filter here, so we approximate.
+
             const filtered = res.suggestions.filter((s) => {
                 const types = s.placePrediction?.types ?? [];
-                // These are common types for city/locality results
+
                 return (
                     types.includes("locality") ||
                     types.includes("administrative_area_level_3") ||
@@ -81,7 +80,7 @@ export default function SearchBar({ onSearch, isLoaded }: SearchBarProps) {
                 );
             });
 
-            // If filtering removes everything, fall back to original results.
+
             const finalList = filtered.length > 0 ? filtered : res.suggestions;
 
             setSuggestions(finalList);
@@ -99,7 +98,7 @@ export default function SearchBar({ onSearch, isLoaded }: SearchBarProps) {
         setSuggestions([]);
         setShowSuggestions(false);
 
-        // Use the "full" string for your existing onSearch flow
+
         onSearch(full);
     };
 
@@ -133,7 +132,7 @@ export default function SearchBar({ onSearch, isLoaded }: SearchBarProps) {
                 <ul className="absolute top-full left-0 right-0 mt-2 bg-card border-2 border-border rounded-xl shadow-lg overflow-hidden z-50">
                     {suggestions.map((s, idx) => {
                         const { main, secondary, full } = buildDisplayText(s);
-                        // Some suggestion objects might not have a stable id; use idx as fallback
+
                         const key = s.placePrediction?.placeId || `${full}-${idx}`;
 
                         return (
