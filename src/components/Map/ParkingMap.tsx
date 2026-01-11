@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { GoogleMap, useJsApiLoader, Libraries } from "@react-google-maps/api";
+import { GoogleMap, Libraries } from "@react-google-maps/api";
+import { useGoogleMaps } from '@/contexts/GoogleMapsProvider';
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { useTranslation } from "react-i18next";
 import { useParkingSpots } from "@/hooks/useParkingSpots";
@@ -89,10 +90,7 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
     const { data: spots = [], isLoading: spotsLoading } = useParkingSpots();
     const { latitude, longitude, error: geoError } = useGeolocation();
 
-    const { isLoaded, loadError } = useJsApiLoader({
-        googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-        libraries: LIBRARIES,
-    });
+    const { isLoaded, loadError } = useGoogleMaps();
 
     const onLoad = useCallback((m: google.maps.Map) => {
         setMap(m);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, MapPin, Camera, Upload, Loader2 } from 'lucide-react';
+import { X, MapPin, Camera, Loader2, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,6 +11,8 @@ import { useGeolocation } from '@/hooks/useGeolocation';
 import { SurfaceType, NewParkingSpot } from '@/types/parking';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { GoogleMap, Marker } from '@react-google-maps/api';
+import { useGoogleMaps } from '@/contexts/GoogleMapsProvider';
 
 interface AddSpotModalProps {
     isOpen: boolean;
@@ -19,9 +21,6 @@ interface AddSpotModalProps {
 
 const surfaceOptions: { value: SurfaceType; labelKey: string; icon: string }[] = [
     { value: 'asphalt', labelKey: 'asphalt', icon: '🛣️' },
-    //{ value: 'cobblestone', labelKey: 'cobblestone', icon: '🧱' },
-    //{ value: 'gravel', labelKey: 'gravel', icon: '⚪' },
-    //{ value: 'dirt', labelKey: 'dirt', icon: '🟤' },
 ];
 
 export default function AddSpotModal({ isOpen, onClose }: AddSpotModalProps) {
@@ -33,6 +32,8 @@ export default function AddSpotModal({ isOpen, onClose }: AddSpotModalProps) {
     const uploadPhoto = useUploadPhoto();
 
     const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [showMapPicker, setShowMapPicker] = useState(false);
+    const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
     const [surfaceType, setSurfaceType] = useState<SurfaceType>('asphalt');
     const [hasShade, setHasShade] = useState(false);
     const [hasRampAccess, setHasRampAccess] = useState(false);
@@ -42,6 +43,11 @@ export default function AddSpotModal({ isOpen, onClose }: AddSpotModalProps) {
     const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
+    const myLocation =
+        latitude && longitude ? { lat: latitude, lng: longitude } : null;
+
+    const { isLoaded } = useGoogleMaps();
+
     if (!isOpen) return null;
 
     const handleUseCurrentLocation = () => {
@@ -50,6 +56,44 @@ export default function AddSpotModal({ isOpen, onClose }: AddSpotModalProps) {
             toast.success(t('myLocation'));
         } else {
             refreshLocation();
+        }
+    };
+
+    const handleUsePinLocation = () => {
+        setShowMapPicker(true);
+        // Set initial map center to current location or selected location
+        if (latitude && longitude) {
+            setMapCenter({ lat: latitude, lng: longitude });
+        } else if (selectedLocation) {
+            setMapCenter(selectedLocation);
+        }
+    };
+
+    const handleGoToMyLocation = () => {
+        if (latitude && longitude) {
+            setMapCenter({ lat: latitude, lng: longitude });
+            toast.success(t('myLocation'));
+        } else {
+            toast.error(t('locationUnavailable'));
+            refreshLocation();
+        }
+    };
+
+    const handleMapClick = (e: google.maps.MapMouseEvent) => {
+        if (e.latLng) {
+            setSelectedLocation({
+                lat: e.latLng.lat(),
+                lng: e.latLng.lng()
+            });
+        }
+    };
+
+    const handleConfirmPin = () => {
+        if (selectedLocation) {
+            setShowMapPicker(false);
+            toast.success(t('locationSelected'));
+        } else {
+            toast.error(t('pleaseSelectLocation'));
         }
     };
 
@@ -113,20 +157,20 @@ export default function AddSpotModal({ isOpen, onClose }: AddSpotModalProps) {
             setNotes('');
             setPhotoFile(null);
             setPhotoPreview(null);
+            setShowMapPicker(false);
+            setMapCenter(null);
         } catch (error) {
             console.error('Error submitting spot:', error);
             toast.error(t('spotSubmitError'));
         }
     };
 
-    // Helper to get city name from coordinates -=CHATGPT 🙏=-
     const getCityFromCoordinates = async (lat: number, lng: number): Promise<string> => {
         try {
             const response = await fetch(
                 `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
             );
             const data = await response.json();
-            // Try to find the city, town, or village in the response
             return data.address.city || data.address.town || data.address.village || data.address.suburb || 'Unknown Location';
         } catch (error) {
             console.error('Error fetching city:', error);
@@ -135,6 +179,110 @@ export default function AddSpotModal({ isOpen, onClose }: AddSpotModalProps) {
     };
 
     const isSubmitting = submitSpot.isPending || uploadPhoto.isPending;
+
+    // Map Picker Modal
+    if (showMapPicker) {
+        return (
+            <div className="fixed inset-0 z-50 bg-background">
+                <div className="h-full flex flex-col">
+                    {/* Map Header */}
+                    <div className="bg-background border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setShowMapPicker(false)}
+                            className="h-10 w-10 rounded-full"
+                        >
+                            <X className="h-5 w-5" />
+                        </Button>
+                        <h3 className="text-lg font-semibold text-foreground">{t('selectLocation')}</h3>
+                        <div className="w-10" />
+                    </div>
+
+                    {/* Map */}
+                    <div className="flex-1 relative">
+                        {isLoaded ? (
+                            <GoogleMap
+                                mapContainerStyle={{ width: '100%', height: '100%' }}
+                                center={mapCenter || selectedLocation || { lat: latitude || 40.7128, lng: longitude || -74.0060 }}
+                                zoom={15}
+                                onClick={handleMapClick}
+                                options={{
+                                    streetViewControl: false,
+                                    mapTypeControl: false,
+                                    fullscreenControl: false,
+                                }}
+                            >
+
+                                {myLocation && (
+                                    <Marker
+                                        position={myLocation}
+                                        title={t('myLocation')}
+                                        icon={{
+                                            path: google.maps.SymbolPath.CIRCLE,
+                                            scale: 8,
+                                            fillColor: '#1e90ff',   // 🔵 blue fill
+                                            fillOpacity: 1,
+                                            strokeColor: '#ffffff', // ⚪ white border
+                                            strokeWeight: 2,
+                                        }}
+                                        zIndex={999}
+                                    />
+                                )}
+
+                                {selectedLocation && (
+                                    <Marker
+                                        position={selectedLocation}
+                                        animation={google.maps.Animation.DROP}
+                                    />
+                                )}
+                            </GoogleMap>
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-muted">
+                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            </div>
+                        )}
+
+                        {/* Instructions overlay */}
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-background/95 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg border border-border">
+                            <p className="text-sm font-medium text-foreground">📍 {t('tapToDropPin')}</p>
+                        </div>
+
+                        {/* My Location Button */}
+                        <div className="absolute top-4 right-4">
+                            <Button
+                                size="icon"
+                                onClick={handleGoToMyLocation}
+                                className="h-12 w-12 rounded-full shadow-lg"
+                                variant="secondary"
+                            >
+                                <MapPin className="h-5 w-5" />
+                            </Button>
+                        </div>
+
+                        {/* Selected coordinates display */}
+                        {selectedLocation && (
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-success/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg text-white text-xs font-medium">
+                                {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Confirm Button */}
+                    <div className="bg-background border-t border-border p-4 shadow-lg">
+                        <Button
+                            onClick={handleConfirmPin}
+                            disabled={!selectedLocation}
+                            className="w-full h-14 text-base font-semibold rounded-xl"
+                        >
+                            <Target className="h-5 w-5 mr-2" />
+                            {t('confirmLocation')}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm">
@@ -164,6 +312,7 @@ export default function AddSpotModal({ isOpen, onClose }: AddSpotModalProps) {
                             {/* Location */}
                             <div className="space-y-3">
                                 <Label className="text-base font-semibold">{t('dropPin')}</Label>
+
                                 <Button
                                     variant="outline"
                                     onClick={handleUseCurrentLocation}
@@ -172,6 +321,26 @@ export default function AddSpotModal({ isOpen, onClose }: AddSpotModalProps) {
                                     <MapPin className="h-5 w-5" />
                                     {t('useCurrentLocation')}
                                 </Button>
+
+                                {/* Divider */}
+                                <div className="relative py-2">
+                                    <div className="absolute inset-0 flex items-center">
+                                        <div className="w-full border-t border-border"></div>
+                                    </div>
+                                    <div className="relative flex justify-center text-xs uppercase">
+                                        <span className="bg-card px-2 text-muted-foreground">or</span>
+                                    </div>
+                                </div>
+
+                                <Button
+                                    variant="outline"
+                                    onClick={handleUsePinLocation}
+                                    className="w-full h-14 text-base gap-3 rounded-xl"
+                                >
+                                    <Target className="h-5 w-5" />
+                                    {t('usePin')}
+                                </Button>
+
                                 {selectedLocation && (
                                     <div className="p-3 bg-success/10 rounded-xl text-success text-sm">
                                         📍 {selectedLocation.lat.toFixed(6)}, {selectedLocation.lng.toFixed(6)}

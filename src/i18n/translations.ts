@@ -36,6 +36,8 @@ export const translations = {
             navigate: 'Navigate',
             openInMaps: 'Open in Maps',
 
+
+
             // Surface Types
             asphalt: 'Asphalt',
             cobblestone: 'Cobblestone',
@@ -66,6 +68,12 @@ export const translations = {
             submit: 'Submit for Review',
             submitting: 'Submitting...',
             cancel: 'Cancel',
+            selectLocation: 'Select Location',
+            tapToDropPin: 'Tap to drop pin',
+            confirmLocation: 'Confirm Pin Location',
+            usePin: 'Use Pin',
+            locationUnavailable: "Location unavailable. Please enable GPS.",
+            locationSelected: 'Location selected',
 
             // Form Validation
             locationRequired: 'Please select a location',
@@ -190,6 +198,12 @@ export const translations = {
             submit: 'Υποβολή για Έλεγχο',
             submitting: 'Υποβολή...',
             cancel: 'Ακύρωση',
+            selectLocation: 'Επιλεξτε τοποθεσια',
+            tapToDropPin: 'Πατηστε για να ορισετε θεση πινεζας',
+            confirmLocation: 'Επιβεβαιωση τοποθεσιας',
+            usePin: 'Τοποθετήσετε πινέζα',
+            locationUnavailable: "Τοποθεσία μη διαθεσημη, παρακαλώ ενεργοποιήστε το GPS.",
+            locationSelected: 'Επιλέχθηκε τοποθεσία',
 
             // Form Validation
             locationRequired: 'Παρακαλώ επιλέξτε τοποθεσία',
