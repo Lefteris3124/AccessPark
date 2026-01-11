@@ -1,4 +1,4 @@
-// supabaseClient.ts
+
 import { createClient } from '@supabase/supabase-js';
 
 // Check if we're in development mode
@@ -8,6 +8,24 @@ const PHP_PROXY_URL = '/api/supabase';
 
 class SupabaseProxyClient {
     private token: string | null = null;
+
+    constructor() {
+        // Load token from localStorage on initialization
+        if (typeof window !== 'undefined') {
+            this.token = localStorage.getItem('supabase_token');
+        }
+    }
+
+    private saveToken(token: string | null) {
+        if (typeof window !== 'undefined') {
+            if (token) {
+                localStorage.setItem('supabase_token', token);
+            } else {
+                localStorage.removeItem('supabase_token');
+            }
+        }
+        this.token = token;
+    }
 
     async request(action: string, data: any = {}) {
         console.log('🔄 Proxying request:', action, 'to', PHP_PROXY_URL);
@@ -38,7 +56,7 @@ class SupabaseProxyClient {
         signUp: async (credentials: { email: string; password: string }) => {
             const data = await this.request('signUp', credentials);
             if (data.access_token) {
-                this.token = data.access_token;
+                this.saveToken(data.access_token);
             }
             return { data, error: null };
         },
@@ -46,14 +64,14 @@ class SupabaseProxyClient {
         signInWithPassword: async (credentials: { email: string; password: string }) => {
             const data = await this.request('signInWithPassword', credentials);
             if (data.access_token) {
-                this.token = data.access_token;
+                this.saveToken(data.access_token);
             }
             return { data, error: null };
         },
 
         signOut: async () => {
             const data = await this.request('signOut');
-            this.token = null;
+            this.saveToken(null);
             return { error: null };
         },
 
@@ -63,13 +81,27 @@ class SupabaseProxyClient {
         },
 
         getSession: async () => {
-            const data = await this.request('getUser');
-            return {
-                data: {
-                    session: data ? { user: data, access_token: this.token } : null
-                },
-                error: null
-            };
+            try {
+                if (!this.token) {
+                    return { data: { session: null }, error: null };
+                }
+                const data = await this.request('getUser');
+                return {
+                    data: {
+                        session: data ? {
+                            user: data,
+                            access_token: this.token,
+                            token_type: 'bearer',
+                            expires_in: 3600,
+                            expires_at: Date.now() + 3600000,
+                            refresh_token: this.token
+                        } : null
+                    },
+                    error: null
+                };
+            } catch (error) {
+                return { data: { session: null }, error };
+            }
         },
 
         onAuthStateChange: (callback: (event: string, session: any) => void) => {
