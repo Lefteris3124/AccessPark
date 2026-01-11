@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { GoogleMap, Libraries } from "@react-google-maps/api";
 import { useGoogleMaps } from '@/contexts/GoogleMapsProvider';
-import { MarkerClusterer } from "@googlemaps/markerclusterer";
+import { MarkerClusterer, SuperClusterAlgorithm } from "@googlemaps/markerclusterer";
 import { useTranslation } from "react-i18next";
 import { useParkingSpots } from "@/hooks/useParkingSpots";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -146,6 +146,13 @@ export default function ParkingMap({ onAddSpotClick }: ParkingMapProps) {
         clustererRef.current = new MarkerClusterer({
             map,
             markers,
+
+
+            algorithm: new SuperClusterAlgorithm({
+                radius: 50,
+                maxZoom: 17,
+            }),
+
             renderer: {
                 render: ({ count, position }) => {
                     return new google.maps.marker.AdvancedMarkerElement({

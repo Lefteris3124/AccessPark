@@ -20,7 +20,7 @@ const App = () => (
             <GoogleMapsProvider>
                 <TooltipProvider>
                     <Toaster />
-                    <Sonner />
+                    <Sonner position="top-center" />
                     <BrowserRouter
                         future={{
                             v7_startTransition: true,

@@ -3,6 +3,7 @@ import { X, Navigation, Sun, Accessibility, Car, DollarSign, AlertTriangle, Chec
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ParkingSpot } from '@/types/parking';
+import { useState } from 'react';
 
 interface SpotDetailsCardProps {
     spot: ParkingSpot;
@@ -26,6 +27,7 @@ export default function SpotDetailsCard({ spot, onClose }: SpotDetailsCardProps)
 
     const surfaceInfo = surfaceIcons[spot.surface_type] || surfaceIcons.asphalt;
     const needsWarning = ['cobblestone', 'gravel', 'dirt'].includes(spot.surface_type);
+    const [isPhotoOpen, setIsPhotoOpen] = useState(false);
 
     return (
         <div className="absolute bottom-0 left-0 right-0 z-20 animate-in slide-in-from-bottom duration-300">
@@ -49,16 +51,27 @@ export default function SpotDetailsCard({ spot, onClose }: SpotDetailsCardProps)
 
                 <div className="px-6 pb-8 space-y-4">
                     {/* Photo  */}
+                    {/* Photo preview */}
                     {spot.photo_url ? (
-                        <div className="relative h-48 sm:h-64 md:h-[800px] w-full rounded-xl overflow-hidden bg-muted shadow-sm">
+                        <button
+                            onClick={() => setIsPhotoOpen(true)}
+                            className="relative w-full h-40 sm:h-48 rounded-xl overflow-hidden bg-muted shadow-sm focus:outline-none"
+                        >
                             <img
                                 src={spot.photo_url}
                                 alt={t('accessibleParking')}
                                 className="w-full h-full object-cover"
                             />
-                        </div>
+
+                            {/* Tap hint */}
+                            <div className="absolute inset-0 bg-black/10 opacity-0 hover:opacity-100 transition flex items-center justify-center">
+      <span className="text-white text-sm font-medium bg-black/50 px-3 py-1 rounded-full">
+        Tap to enlarge
+      </span>
+                            </div>
+                        </button>
                     ) : (
-                        <div className="h-32 sm:h-48 md:h-64 rounded-xl bg-muted flex items-center justify-center">
+                        <div className="h-32 sm:h-40 rounded-xl bg-muted flex items-center justify-center">
                             <Accessibility className="h-16 w-16 text-muted-foreground/50" />
                         </div>
                     )}
@@ -145,6 +158,30 @@ export default function SpotDetailsCard({ spot, onClose }: SpotDetailsCardProps)
                     </Button>
                 </div>
             </div>
+
+            {isPhotoOpen && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center animate-in fade-in"
+                    onClick={() => setIsPhotoOpen(false)}
+                >
+                    {/* Close button */}
+                    <button
+                        onClick={() => setIsPhotoOpen(false)}
+                        className="absolute top-4 right-4 h-10 w-10 rounded-full bg-black/60 text-white flex items-center justify-center"
+                        aria-label={t('close')}
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+
+                    <img
+                        src={spot.photo_url}
+                        alt={t('accessibleParking')}
+                        className="max-h-[90vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
+            )}
+
         </div>
     );
 }
